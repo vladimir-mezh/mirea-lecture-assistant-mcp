@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mirea-lecture-assistant-mcp"
-version = "0.1.2"
+version = "0.2.0"
 description = "Independent optional MCP adapter for MIREA Lecture Assistant"
 requires-python = ">=3.11"
 dependencies = ["mcp>=1.20,<2"]

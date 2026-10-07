@@ -57,7 +57,7 @@ def test_packaged_mcp_works_against_app_v1_api_without_real_profile(tmp_path, us
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                assert len((await session.list_tools()).tools) == 6
+                assert len((await session.list_tools()).tools) == 13
                 status = await session.call_tool("get_status", {})
                 assert not status.isError
                 assert json.loads(status.content[0].text)["fixture"]
@@ -120,7 +120,7 @@ def test_update_while_a_client_runs_the_old_version_then_cleanup(tmp_path):
                 assert (root / "versions" / "1.0.0" / "MireaAssistantMcp.exe").exists()
                 assert list(root.glob("McpLauncher.exe.*.old"))
                 assert not clean_leftovers(root)
-                assert len((await session.list_tools()).tools) == 6
+                assert len((await session.list_tools()).tools) == 13
 
     asyncio.run(update_while_connected())
     deadline = time.monotonic() + 30

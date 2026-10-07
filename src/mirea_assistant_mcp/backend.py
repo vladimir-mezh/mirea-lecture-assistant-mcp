@@ -10,6 +10,9 @@ from pathlib import Path
 
 from . import __version__
 
+UPDATE_APP = ("This needs a newer Lecture Assistant: ask the user to update the app "
+              "(Настройки → Обновления).")
+
 
 class Backend:
     def __init__(self, profile: Path, name="MCP-клиент"):
@@ -19,7 +22,7 @@ class Backend:
         self.closed = threading.Event()
         self.thread = None
 
-    def call(self, method: str, params=None, *, tool=False):
+    def call(self, method: str, params=None, *, tool=False, timeout=10):
         if tool:
             self.client["state"] = "connected"
         try:
@@ -38,12 +41,14 @@ class Backend:
             )
             # Never route credentials through an environment HTTP proxy.
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            with opener.open(request, timeout=10) as response:
+            with opener.open(request, timeout=timeout) as response:
                 data = response.read(262145)
                 if len(data) > 262144:
                     raise ValueError()
                 result = json.loads(data)
             if "error" in result:
+                if result["error"] == "Unsupported MCP method":
+                    raise RuntimeError(UPDATE_APP)
                 raise RuntimeError(str(result["error"]))
             return result.get("result", result)
         except RuntimeError:
