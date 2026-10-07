@@ -129,3 +129,40 @@ def test_update_while_a_client_runs_the_old_version_then_cleanup(tmp_path):
     assert clean_leftovers(root)
     assert sorted(p.name for p in (root / "versions").iterdir()) == ["1.0.1"]
     assert not list(root.glob("McpLauncher.exe.*"))
+
+
+@pytest.mark.skipif(sys.platform != "win32" or not EXE.exists()
+                    or not (APP / "src" / "mirea_lecture_assistant" / "leftovers.py").exists(),
+                    reason="Real onefile unpacking needs Windows, the build and the app")
+def test_folder_left_by_a_killed_adapter_is_removed_by_the_app(tmp_path):
+    """An AI client kills the process: its unpacked folder stays until the app removes it."""
+    import subprocess
+    import time
+
+    sys.path.insert(0, str(APP / "src"))
+    from mirea_lecture_assistant import leftovers
+
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    environment = dict(os.environ, TMP=str(temp), TEMP=str(temp))
+    process = subprocess.Popen([str(EXE), "--profile", str(tmp_path)], env=environment,
+                               stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL)
+    later = lambda: time.time() + 3600  # noqa: E731 - past the "still unpacking" guard
+    try:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and not list(temp.glob(f"_MEI*/{leftovers.MCP_MARKER}")):
+            time.sleep(0.2)
+        assert list(temp.glob(f"_MEI*/{leftovers.MCP_MARKER}")), "marker not bundled"
+        time.sleep(3)  # Python is loaded by now
+        assert leftovers.clean_runtime_folders(temp, now=later()) == 0
+        assert list(temp.glob(f"_MEI*/{leftovers.MCP_MARKER}"))
+    finally:
+        process.kill()
+        process.stdin.close()
+        process.wait(timeout=30)
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and list(temp.glob("_MEI*")):
+        leftovers.clean_runtime_folders(temp, now=later())
+        time.sleep(0.5)
+    assert not list(temp.glob("_MEI*"))
