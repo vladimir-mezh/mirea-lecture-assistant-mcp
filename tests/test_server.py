@@ -28,8 +28,11 @@ def test_tools_only_expose_the_bounded_configuration_api():
     names = asyncio.run(server.list_tools())
     assert {tool.name for tool in names} == {
         "get_status", "get_settings", "get_schedule", "get_subject_rules",
-        "update_settings", "set_subject_rule",
+        "update_settings", "set_subject_rule", "check_health", "wait_and_check", "repair",
+        "get_recent_problems", "get_attendance_history", "get_vpn_help", "report_fix",
     }
+    prompts = asyncio.run(server.list_prompts())
+    assert {prompt.name for prompt in prompts} == {"duty_check", "setup_lecture_watch"}
 
 
 @pytest.mark.parametrize("packaged", [False, True])
@@ -47,7 +50,7 @@ def test_real_stdio_handshake_lists_tools_and_handles_app_absence(tmp_path, pack
                 initialized = await session.initialize()
                 assert "MIREA" in initialized.serverInfo.name
                 tools = await session.list_tools()
-                assert len(tools.tools) == 6
+                assert len(tools.tools) == 13
                 result = await session.call_tool("get_status", {})
                 assert result.isError
                 assert "unavailable" in result.content[0].text
@@ -83,3 +86,43 @@ def test_launcher_gives_the_adapter_its_own_pyinstaller_folder(tmp_path, monkeyp
     args, kwargs = calls[0]
     assert args[0] == str(root / "versions" / "0.1.0" / "MireaAssistantMcp.exe")
     assert kwargs["env"]["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
+
+
+def test_an_older_app_gets_a_plain_ask_to_update(tmp_path, monkeypatch):
+    import io
+
+    import mirea_assistant_mcp.backend as backend_module
+
+    (tmp_path / "mcp-connection.json").write_text(
+        json.dumps({"protocol": 1, "port": 5000, "token": "t" * 40}), encoding="utf-8")
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    class Opener:
+        def open(self, *_args, **_kwargs):
+            return Reply(json.dumps({"error": "Unsupported MCP method"}).encode())
+
+    monkeypatch.setattr(backend_module.urllib.request, "build_opener", lambda *_: Opener())
+    with pytest.raises(RuntimeError) as exc:
+        Backend(tmp_path).call("check_health", tool=True)
+    assert "update" in str(exc.value)
+
+
+def test_waiting_check_gives_the_app_time_to_answer(monkeypatch):
+    calls = []
+
+    class Fake:
+        def call(self, method, params=None, **kwargs):
+            calls.append((method, params, kwargs))
+            return {}
+
+    server = create_server(Fake())
+    asyncio.run(server.call_tool("wait_and_check", {"seconds": 90}))
+    method, params, kwargs = calls[-1]
+    assert (method, params) == ("wait_and_check", {"seconds": 90})
+    assert kwargs["timeout"] > 90
