@@ -12,11 +12,12 @@ import pytest
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-APP = Path(os.environ.get("MIREA_APP_SOURCE", r"D:\MIREA Lecture Assistant"))
+# A checkout of Lecture Assistant; CI clones it, locally set the variable.
+APP = Path(os.environ.get("MIREA_APP_SOURCE", "lecture-assistant"))
 EXE = Path(__file__).resolve().parents[1] / "dist" / "MireaAssistantMcp.exe"
 
 
-@pytest.mark.skipif(not EXE.exists() or not (APP / "src").exists(),
+@pytest.mark.skipif(not EXE.exists() or not (APP / "src" / "mirea_lecture_assistant" / "mcp_install.py").exists(),
                     reason="Local packaged compatibility check requires both projects")
 @pytest.mark.parametrize("use_launcher", [False, True])
 def test_packaged_mcp_works_against_app_v1_api_without_real_profile(tmp_path, use_launcher):
@@ -47,7 +48,9 @@ def test_packaged_mcp_works_against_app_v1_api_without_real_profile(tmp_path, us
         from mirea_lecture_assistant.mcp_install import install_archive
 
         archive = EXE.with_name("MireaAssistantMcp-windows-x64.zip")
-        install_archive(tmp_path / "mcp", archive.read_bytes(), "0.1.0")
+        from mirea_assistant_mcp import __version__
+
+        install_archive(tmp_path / "mcp", archive.read_bytes(), __version__)
         command = tmp_path / "mcp" / "McpLauncher.exe"
     async def check():
         params = StdioServerParameters(command=str(command), args=["--profile", str(tmp_path)])
@@ -68,3 +71,61 @@ def test_packaged_mcp_works_against_app_v1_api_without_real_profile(tmp_path, us
         asyncio.run(check())
     finally:
         access.stop()
+
+
+def _release(version: str, launcher: bytes) -> bytes:
+    """The real adapter, packed as another release with its own launcher bytes."""
+    import hashlib
+    import io
+    import zipfile
+
+    files = {"MireaAssistantMcp.exe": EXE.read_bytes(), "McpLauncher.exe": launcher}
+    manifest = {"version": version, "app_protocol": 1,
+                "sha256": {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}}
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as bundle:
+        for name, data in files.items():
+            bundle.writestr(name, data)
+        bundle.writestr("manifest.json", json.dumps(manifest))
+        bundle.writestr("README.md", "Packaged update check")
+        bundle.writestr("LICENSE", "MIT")
+    return out.getvalue()
+
+
+@pytest.mark.skipif(not EXE.exists() or not (APP / "src" / "mirea_lecture_assistant" / "mcp_install.py").exists(),
+                    reason="Local packaged compatibility check requires both projects")
+def test_update_while_a_client_runs_the_old_version_then_cleanup(tmp_path):
+    """Windows keeps running programs locked: the old version and launcher go later."""
+    import time
+
+    sys.path.insert(0, str(APP / "src"))
+    from mirea_lecture_assistant.mcp_install import clean_leftovers, install_archive, installed
+
+    launcher = EXE.with_name("McpLauncher.exe").read_bytes()
+    root = tmp_path / "mcp"
+    install_archive(root, _release("1.0.0", launcher), "1.0.0")
+    # A different launcher build; it is only placed, never started.
+    newer_launcher = launcher[:-64] + b"\0" * 64
+
+    async def update_while_connected():
+        params = StdioServerParameters(command=str(root / "McpLauncher.exe"),
+                                       args=["--profile", str(tmp_path)])
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                install_archive(root, _release("1.0.1", newer_launcher), "1.0.1")
+                assert installed(root)["version"] == "1.0.1"
+                assert (root / "McpLauncher.exe").read_bytes() == newer_launcher
+                # Both still run: neither may be gone yet.
+                assert (root / "versions" / "1.0.0" / "MireaAssistantMcp.exe").exists()
+                assert list(root.glob("McpLauncher.exe.*.old"))
+                assert not clean_leftovers(root)
+                assert len((await session.list_tools()).tools) == 6
+
+    asyncio.run(update_while_connected())
+    deadline = time.monotonic() + 30
+    while not clean_leftovers(root) and time.monotonic() < deadline:
+        time.sleep(0.5)
+    assert clean_leftovers(root)
+    assert sorted(p.name for p in (root / "versions").iterdir()) == ["1.0.1"]
+    assert not list(root.glob("McpLauncher.exe.*"))

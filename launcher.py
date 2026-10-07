@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -24,9 +25,12 @@ def main():
     args = parser.parse_args()
     try:
         executable = selected_executable(args.profile / "mcp")
+        # The launcher is itself a PyInstaller onefile program: the adapter must
+        # unpack into its own folder, not take this process's for its own.
+        environment = dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT="1")
         # Inherit stdio exactly. Never print banners/status into the MCP transport.
         return subprocess.call([str(executable), "--profile", str(args.profile),
-                                "--client-name", args.client_name])
+                                "--client-name", args.client_name], env=environment)
     except (OSError, ValueError):
         print("MCP is not installed; reinstall from Lecture Assistant's MCP tab.", file=sys.stderr)
         return 1
