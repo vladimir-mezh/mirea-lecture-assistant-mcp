@@ -64,3 +64,22 @@ def test_launcher_rejects_path_traversal(tmp_path):
     (tmp_path / "current.json").write_text(json.dumps({"version": "../outside", "app_protocol": 1}))
     with pytest.raises(ValueError):
         module.selected_executable(tmp_path)
+
+
+def test_launcher_gives_the_adapter_its_own_pyinstaller_folder(tmp_path, monkeypatch):
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    spec = spec_from_file_location("launcher", Path(__file__).resolve().parents[1] / "launcher.py")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    root = tmp_path / "mcp"
+    (root / "versions" / "0.1.0").mkdir(parents=True)
+    (root / "current.json").write_text(json.dumps({"version": "0.1.0", "app_protocol": 1}))
+    calls = []
+    monkeypatch.setattr(module.subprocess, "call",
+                        lambda args, **kwargs: calls.append((args, kwargs)) or 0)
+    monkeypatch.setattr(sys, "argv", ["McpLauncher.exe", "--profile", str(tmp_path)])
+    assert module.main() == 0
+    args, kwargs = calls[0]
+    assert args[0] == str(root / "versions" / "0.1.0" / "MireaAssistantMcp.exe")
+    assert kwargs["env"]["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
