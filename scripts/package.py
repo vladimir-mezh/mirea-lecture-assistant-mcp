@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import zipfile
@@ -12,11 +13,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from mirea_assistant_mcp import __version__
 
+MARKER = "mirea-assistant-mcp.runtime"  # the name Lecture Assistant looks for
+
 
 def main():
+    # Lets Lecture Assistant tell this program's unpacked %TEMP%\_MEI… folder,
+    # left behind when an AI client kills the process, from other programs'.
+    marker = ROOT / "build" / MARKER
+    marker.parent.mkdir(exist_ok=True)
+    marker.write_text("MIREA Lecture Assistant MCP runtime\n", encoding="ascii")
     for entry, name in [("entry.py", "MireaAssistantMcp"), ("launcher.py", "McpLauncher")]:
         subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--onefile",
-                        "--console", "--paths", "src", "--name", name, entry],
+                        "--console", "--paths", "src", "--name", name,
+                        "--add-data", f"{marker}{os.pathsep}.", entry],
                        cwd=ROOT, check=True)
     manifest = {"version": __version__, "app_protocol": 1, "sha256": {
         name: hashlib.sha256((ROOT / "dist" / name).read_bytes()).hexdigest()
