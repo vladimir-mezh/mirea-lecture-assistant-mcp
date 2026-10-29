@@ -22,15 +22,38 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -c requirements-build.txt -e . pytest pyinstaller
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache-dependency-path: native/go.sum
+      - run: python -m pip install -c requirements-build.txt -e . pytest
       - name: Release version
         id: version
         run: python scripts/release_tag.py
+      - name: Native unit tests and dependency verification
+        working-directory: native
+        run: |
+          go mod verify
+          go test -race ./...
+          go vet ./...
       - run: python -m pytest
       - run: python scripts/package.py
       - name: Packaged launcher, adapter and update checks
         run: python -m pytest -rs
+      - name: Preserve already published artifacts
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $existing = gh release view '${{ steps.version.outputs.tag }}' --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0 -and -not ($existing | ConvertFrom-Json).isDraft) {
+            'skip=true' >> $env:GITHUB_OUTPUT
+          } else {
+            'skip=false' >> $env:GITHUB_OUTPUT
+          }
       - uses: softprops/action-gh-release@v2
+        if: steps.published.outputs.skip != 'true'
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: MIREA Lecture Assistant MCP ${{ steps.version.outputs.tag }}
