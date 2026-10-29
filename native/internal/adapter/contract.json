@@ -1,0 +1,265 @@
+{
+  "instructions": "Diagnose, repair and configure the local MIREA Lecture Assistant. Start any check with check_health; if it is ok, stop there. Repairs need the app's own permission. Ask before changing settings or subject rules. Credentials are entered by the user in the app; there are no QR, attendance, chat, shell or credential tools. Prompts: duty_check (one check-and-repair round), setup_lecture_watch (schedule checks for today).",
+  "tools": [
+    {
+      "definition": {
+        "name": "get_status",
+        "description": "Read application version and scanner state without logging in or submitting anything.",
+        "inputSchema": {
+          "properties": {},
+          "title": "get_statusArguments",
+          "type": "object"
+        }
+      },
+      "method": "status",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "get_settings",
+        "description": "Read non-secret settings and their validation schema. No credentials or email codes.",
+        "inputSchema": {
+          "properties": {},
+          "title": "get_settingsArguments",
+          "type": "object"
+        }
+      },
+      "method": "get_settings",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "get_schedule",
+        "description": "Read cached schedule, without refreshing websites or opening lectures.",
+        "inputSchema": {
+          "properties": {},
+          "title": "get_scheduleArguments",
+          "type": "object"
+        }
+      },
+      "method": "get_schedule",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "get_subject_rules",
+        "description": "Read AUTO/ASK/IGNORE rules for subjects in the cached schedule.",
+        "inputSchema": {
+          "properties": {},
+          "title": "get_subject_rulesArguments",
+          "type": "object"
+        }
+      },
+      "method": "get_subject_rules",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "update_settings",
+        "description": "Apply only settings listed by get_settings. Requires explicit app-side write permission\n        and no unsaved UI edits. Ask the user first. Changes take effect in the running app.\n        ",
+        "inputSchema": {
+          "properties": {
+            "settings": {
+              "additionalProperties": true,
+              "title": "Settings",
+              "type": "object"
+            }
+          },
+          "required": [
+            "settings"
+          ],
+          "title": "update_settingsArguments",
+          "type": "object"
+        }
+      },
+      "method": "update_settings",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "set_subject_rule",
+        "description": "Set AUTO/ASK/IGNORE for an existing subject, only at user's request and with app-side\n        permission. AUTO affects future lecture opening; never change attendance rules silently.\n        ",
+        "inputSchema": {
+          "properties": {
+            "subject": {
+              "title": "Subject",
+              "type": "string"
+            },
+            "mode": {
+              "title": "Mode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "subject",
+            "mode"
+          ],
+          "title": "set_subject_ruleArguments",
+          "type": "object"
+        }
+      },
+      "method": "set_subject_rule",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "check_health",
+        "description": "Is the app working right now? Returns verdict \"ok\" or \"problem\", each problem with\n        repair actions, the current pair, and a network check (MIREA sites, internet, VPN)\n        when something is wrong. Call this first; if ok, nothing else is needed.\n        ",
+        "inputSchema": {
+          "properties": {},
+          "title": "check_healthArguments",
+          "type": "object"
+        }
+      },
+      "method": "check_health",
+      "timeout": 30
+    },
+    {
+      "definition": {
+        "name": "wait_and_check",
+        "description": "Wait 0–120 seconds (a repair takes a minute or so), then check_health again.",
+        "inputSchema": {
+          "properties": {
+            "seconds": {
+              "default": 60,
+              "title": "Seconds",
+              "type": "integer"
+            }
+          },
+          "title": "wait_and_checkArguments",
+          "type": "object"
+        }
+      },
+      "method": "wait_and_check",
+      "timeout": 35
+    },
+    {
+      "definition": {
+        "name": "repair",
+        "description": "Start one repair from a problem's actions: retry_login, refresh_schedule,\n        reopen_lecture, restart_browser or start_scanner. Needs the user's «Разрешить ИИ чинить\n        приложение» permission in the app. Check the result with wait_and_check.\n        ",
+        "inputSchema": {
+          "properties": {
+            "action": {
+              "title": "Action",
+              "type": "string"
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "title": "repairArguments",
+          "type": "object"
+        }
+      },
+      "method": "repair",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "get_recent_problems",
+        "description": "Latest warnings and errors of the app's log: time, level, module, event name only.",
+        "inputSchema": {
+          "properties": {},
+          "title": "get_recent_problemsArguments",
+          "type": "object"
+        }
+      },
+      "method": "get_recent_problems",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "get_attendance_history",
+        "description": "Recent QR events and the pairs where attendance was marked (no QR contents).",
+        "inputSchema": {
+          "properties": {},
+          "title": "get_attendance_historyArguments",
+          "type": "object"
+        }
+      },
+      "method": "get_attendance_history",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "get_vpn_help",
+        "description": "How to let MIREA and MTS Link bypass the user's VPN, with ready files; also shows\n        the instructions in the app. Use when check_health says vpn_suspected.\n        ",
+        "inputSchema": {
+          "properties": {},
+          "title": "get_vpn_helpArguments",
+          "type": "object"
+        }
+      },
+      "method": "get_vpn_help",
+      "timeout": 10
+    },
+    {
+      "definition": {
+        "name": "report_fix",
+        "description": "Finish a repair round: 3–6 lines in Russian on what was wrong, what you did and\n        whether it helped. The app removes personal data and sends it to the developer.\n        ",
+        "inputSchema": {
+          "properties": {
+            "summary": {
+              "title": "Summary",
+              "type": "string"
+            },
+            "fixed": {
+              "title": "Fixed",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "summary",
+            "fixed"
+          ],
+          "title": "report_fixArguments",
+          "type": "object"
+        }
+      },
+      "method": "report_fix",
+      "timeout": 10
+    }
+  ],
+  "prompts": [
+    {
+      "definition": {
+        "name": "duty_check",
+        "title": "Проверить и починить приложение",
+        "description": "One check-and-repair round of MIREA Lecture Assistant.",
+        "arguments": []
+      },
+      "result": {
+        "description": "One check-and-repair round of MIREA Lecture Assistant.",
+        "messages": [
+          {
+            "role": "user",
+            "content": {
+              "type": "text",
+              "text": "Ты — ИИ-дежурный приложения MIREA Lecture Assistant на компьютере студента.\nПроверь, что приложение работает на текущей паре, и почини, если нет. Пользуйся только\nинструментами этого MCP-сервера.\n\n1. Вызови check_health. Если verdict равен \"ok\" — ответь «OK» и сразу закончи, ничего\n   больше не делай: так проверка почти ничего не стоит.\n2. Если network.verdict равен \"vpn_suspected\" — чинить приложение бесполезно: вызови\n   get_vpn_help и коротко, простыми словами скажи пользователю, что сделать с VPN.\n   Если \"offline\" — скажи, что нет интернета.\n3. Иначе бери проблемы из problems по порядку и вызывай repair с действием из её actions.\n   После каждого действия вызывай wait_and_check (60–90 секунд). Не больше пяти действий.\n   Если починка выключена, попроси пользователя включить «Разрешить ИИ чинить приложение»\n   на вкладке MCP.\n4. В конце вызови report_fix: 3–6 строк по-русски, что было, что сделал и помогло ли;\n   fixed — true, если check_health в итоге \"ok\".\n\nНе проси и не трогай пароли, коды из писем, QR-коды и чат лекции."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "name": "setup_lecture_watch",
+        "title": "Дежурство на сегодняшних парах",
+        "description": "Schedule checks at +5 and +20 minutes of every pair today.",
+        "arguments": []
+      },
+      "result": {
+        "description": "Schedule checks at +5 and +20 minutes of every pair today.",
+        "messages": [
+          {
+            "role": "user",
+            "content": {
+              "type": "text",
+              "text": "Настрой дежурство за MIREA Lecture Assistant на сегодня.\n\n1. Вызови get_schedule и выбери сегодняшние пары.\n2. Для каждой пары создай две разовые отложенные задачи своими средствами (если ты умеешь\n   создавать отложенные или запланированные задачи): через 5 и через 20 минут после\n   начала пары, по местному времени компьютера. Название: «МИРЭА: проверка ЧЧ:ММ».\n3. Текст каждой задачи — инструкция дежурного: вызвать check_health; если verdict \"ok\" —\n   ответить «OK» и закончить без лишних действий; иначе действовать по инструкции\n   duty_check этого сервера (починка через repair, проверка через wait_and_check,\n   отчёт через report_fix).\n4. Покажи пользователю список созданных проверок и напомни: компьютер не должен спать.\n\nЕсли создавать отложенные задачи ты не умеешь, скажи об этом. Предложи включить\n«ИИ-дежурного» на вкладке MCP в приложении: тогда приложение само проверяет пары и\nзовёт Codex или Claude Code только при сбое."
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
