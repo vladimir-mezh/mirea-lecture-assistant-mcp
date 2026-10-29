@@ -13,7 +13,11 @@ from mirea_assistant_mcp.server import create_server
 
 
 class Recorder:
+    def __init__(self):
+        self.calls = 0
+
     def call(self, method, params=None, **kwargs):
+        self.calls += 1
         self.method, self.timeout = method, kwargs.get("timeout", 10)
         return {"fixture": True}
 
@@ -31,7 +35,12 @@ async def contract():
                 "integer": 0,
                 "string": "fixture",
             }[schema["type"]]
+        before = recorder.calls
         await server.call_tool(tool.name, arguments)
+        if recorder.calls != before + 1:
+            raise RuntimeError(
+                "Native contract requires an explicit handler for " + tool.name
+            )
         tools.append(
             {
                 "definition": tool.model_dump(mode="json", exclude_none=True),
