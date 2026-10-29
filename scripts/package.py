@@ -21,7 +21,7 @@ def main():
     if not go:
         sys.exit("Go 1.27.3 is required to build the native Windows adapters")
     if (
-        subprocess.check_output([go, "env", "GOVERSION"], text=True).strip()
+        subprocess.check_output([go, "env", "GOVERSION"], encoding="utf-8").strip()
         != "go1.27.3"
     ):
         sys.exit("Use the pinned Go 1.27.3 toolchain for reproducible release builds")
@@ -85,7 +85,7 @@ def main():
 def third_party_notices(go):
     """The five-file archive remains compatible with existing app installers."""
     notices = [(ROOT / "LICENSE").read_text(encoding="utf-8")]
-    goroot = subprocess.check_output([go, "env", "GOROOT"], text=True).strip()
+    goroot = subprocess.check_output([go, "env", "GOROOT"], encoding="utf-8").strip()
     notices.extend(
         [
             "\n--- Go standard library/runtime ---\n",
@@ -95,9 +95,9 @@ def third_party_notices(go):
     if (Path(goroot) / "PATENTS").exists():
         notices.append((Path(goroot) / "PATENTS").read_text(encoding="utf-8"))
     modules = subprocess.check_output(
-        [go, "list", "-deps", "-json", "./cmd/adapter", "./cmd/launcher"],
+        [go, "list", "-deps", "-json=Module", "./cmd/adapter", "./cmd/launcher"],
         cwd=ROOT / "native",
-        text=True,
+        encoding="utf-8",
     )
     decoder, offset, seen = json.JSONDecoder(), 0, set()
     while modules[offset:].strip():
